@@ -34,6 +34,9 @@ urlpatterns = [
     
     # API endpoints
     path('api/accounts/', include('accounts.urls')),
+    path('api/apiaries/', include('apiaries.urls')),
+    path('api/devices/', include('devices.urls')),
+    path('api/inspections/', include('inspections.urls')),
 ]
 
 # Serve media files in development
