@@ -16,7 +16,6 @@ from datetime import timedelta
 import os
 from dotenv import load_dotenv
 from urllib.parse import urlparse, parse_qsl
-import dj_database_url
 
 # Load environment variables from .env file
 load_dotenv()
@@ -99,20 +98,19 @@ WSGI_APPLICATION = 'smart_nyuki_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Database configuration
-database_url = os.getenv("DATABASE_URL")
-if database_url:
-    DATABASES = {
-        'default': dj_database_url.parse(database_url)
+tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': tmpPostgres.path.replace('/', ''),
+        'USER': tmpPostgres.username,
+        'PASSWORD': tmpPostgres.password,
+        'HOST': tmpPostgres.hostname,
+        'PORT': 5432,
+        'OPTIONS': dict(parse_qsl(tmpPostgres.query)),
     }
-else:
-    # Fallback to SQLite for development
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -258,6 +256,6 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # CORS configuration for production
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', 
-    default='http://localhost:3000,http://127.0.0.1:3000',
-    cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS',
+                              default='http://localhost:3000,http://127.0.0.1:3000',
+                              cast=lambda v: [s.strip() for s in v.split(',')])
