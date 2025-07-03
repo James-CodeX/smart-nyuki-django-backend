@@ -32,6 +32,9 @@ def health_check(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     
+    # Health check endpoint
+    path('api/health/', health_check, name='health_check'),
+    
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
