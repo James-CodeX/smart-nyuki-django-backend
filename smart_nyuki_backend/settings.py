@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apiaries',
     'devices',
     'inspections',
+    'production',
 ]
 
 MIDDLEWARE = [

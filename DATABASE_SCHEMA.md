@@ -24,8 +24,8 @@ App Structure:
    InspectionReports model
    Inspection scheduling and reporting functionality
 5. production (Production & Monitoring)
-   Harvests model
-   Alerts model
+   Harvests model independently as its own app
+   Alerts model independently as its own app
    Harvest tracking and alert management
 
 MODELS
