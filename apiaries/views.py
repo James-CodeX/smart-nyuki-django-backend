@@ -68,6 +68,45 @@ class ApiariesViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
+    def available_hives(self, request, pk=None):
+        """Get available hives for smart device assignment in a specific apiary"""
+        apiary = self.get_object()
+        # Filter hives that do not have a smart device
+        unassigned_hives = apiary.hives.filter(
+            is_active=True,
+            has_smart_device=False
+        )
+        
+        # Create response with unassigned option and available hives
+        response_data = {
+            'apiary': {
+                'id': str(apiary.id),
+                'name': apiary.name
+            },
+            'available_options': [
+                {
+                    'id': None,
+                    'name': 'Leave unassigned',
+                    'type': 'unassigned',
+                    'description': 'Device will not be assigned to any hive'
+                }
+            ]
+        }
+        
+        # Add unassigned hives as options
+        for hive in unassigned_hives:
+            response_data['available_options'].append({
+                'id': str(hive.id),
+                'name': hive.name,
+                'type': 'hive',
+                'hive_type': hive.get_type_display(),
+                'installation_date': hive.installation_date,
+                'description': f'{hive.get_type_display()} hive installed on {hive.installation_date}'
+            })
+        
+        return Response(response_data)
+    
+    @action(detail=True, methods=['get'])
     def stats(self, request, pk=None):
         """Get statistics for a specific apiary"""
         apiary = self.get_object()
