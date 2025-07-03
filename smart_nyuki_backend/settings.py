@@ -216,11 +216,10 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
-# CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React development server
-    "http://127.0.0.1:3000",
-]
+# CORS settings - configured from environment variables
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS',
+                              default='http://localhost:3000,http://127.0.0.1:3000',
+                              cast=lambda v: [s.strip() for s in v.split(',')])
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -255,7 +254,3 @@ if not DEBUG:
     X_FRAME_OPTIONS = 'DENY'
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-# CORS configuration for production
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS',
-                              default='http://localhost:3000,http://127.0.0.1:3000',
-                              cast=lambda v: [s.strip() for s in v.split(',')])

@@ -8,17 +8,18 @@ from apiaries.models import Hives
 class HarvestsSerializer(serializers.ModelSerializer):
     """Serializer for Harvests model"""
     hive_name = serializers.CharField(source='hive.name', read_only=True)
+    apiary_name = serializers.CharField(source='hive.apiary.name', read_only=True)
     harvested_by_name = serializers.CharField(source='harvested_by.full_name', read_only=True)
     total_weight_kg = serializers.ReadOnlyField()
     
     class Meta:
         model = Harvests
         fields = [
-            'id', 'hive', 'hive_name', 'harvest_date', 'honey_kg', 
+            'id', 'hive', 'hive_name', 'apiary_name', 'harvest_date', 'honey_kg', 
             'wax_kg', 'pollen_kg', 'processing_method', 'harvested_by',
             'harvested_by_name', 'quality_notes', 'created_at', 'total_weight_kg'
         ]
-        read_only_fields = ['id', 'harvested_by', 'created_at', 'hive_name', 'harvested_by_name', 'total_weight_kg']
+        read_only_fields = ['id', 'harvested_by', 'created_at', 'hive_name', 'apiary_name', 'harvested_by_name', 'total_weight_kg']
     
     def validate(self, data):
         # Ensure hive belongs to the authenticated user's apiaries
