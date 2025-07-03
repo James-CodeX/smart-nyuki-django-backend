@@ -23,6 +23,11 @@ from drf_spectacular.views import (
     SpectacularRedocView, 
     SpectacularSwaggerView
 )
+from django.http import JsonResponse
+
+def health_check(request):
+    """Health check endpoint for Railway deployment"""
+    return JsonResponse({"status": "healthy", "message": "Smart Nyuki API is running"})
 
 urlpatterns = [
     path('admin/', admin.site.urls),
