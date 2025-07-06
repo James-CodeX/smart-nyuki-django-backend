@@ -218,10 +218,15 @@ SIMPLE_JWT = {
 
 # CORS settings - configured from environment variables
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS',
-                             default='http://localhost:3000,http://127.0.0.1:3000,https://smart-nyuki-nextjs-frontend.vercel.app',
-                             cast=lambda v: [s.strip() for s in v.split(',')])
+                              default='http://localhost:3000,http://127.0.0.1:3000',
+                              cast=lambda v: [s.strip() for s in v.split(',')])
 
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF settings
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS',
+                              default='https://web-production-7fab.up.railway.app,http://localhost:8000,http://127.0.0.1:8000',
+                              cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Spectacular settings for API documentation
 SPECTACULAR_SETTINGS = {
@@ -253,4 +258,3 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     X_FRAME_OPTIONS = 'DENY'
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
