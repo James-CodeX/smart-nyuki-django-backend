@@ -225,7 +225,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS',
-                              default='https://web-production-7fab.up.railway.app,http://localhost:8000,http://127.0.0.1:8000',
+                              default='https://web-production-7fa6.up.railway.app,http://localhost:8000,http://127.0.0.1:8000',
                               cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Spectacular settings for API documentation
