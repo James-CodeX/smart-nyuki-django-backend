@@ -148,6 +148,7 @@ class SmartDevicesDetailSerializer(SmartDevicesSerializer):
 class SensorReadingsCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating sensor readings with device serial number"""
     device_serial = serializers.CharField(write_only=True)
+    timestamp = serializers.DateTimeField(required=False)
     
     class Meta:
         model = SensorReadings
@@ -168,4 +169,10 @@ class SensorReadingsCreateSerializer(serializers.ModelSerializer):
         """Create sensor reading with device from serial number"""
         device = validated_data.pop('device_serial')
         validated_data['device'] = device
+        
+        # If timestamp is not provided, use current time
+        if 'timestamp' not in validated_data:
+            from django.utils import timezone
+            validated_data['timestamp'] = timezone.now()
+        
         return super().create(validated_data)
