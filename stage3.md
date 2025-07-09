@@ -177,6 +177,119 @@ Stage 3 focuses on integrating smart device management within the Smart Nyuki sy
 - **Detail/Update**
   - **URL**: `GET/PATCH /api/devices/device-images/{image_id}/`
 
+### Hive Sensor Readings
+
+- **Get Sensor Readings for Hive**
+  - **URL**: `GET /api/apiaries/hives/{hive_id}/sensor_readings/`
+  - **Authentication**: Required (Bearer token)
+  - **Description**: Get sensor readings from smart devices assigned to a specific hive
+  - **Query Parameters**:
+    - `limit`: Number of readings to return (default: 10)
+    - `ordering`: Order by timestamp (use `-timestamp` for newest first)
+  - **Response**: List of sensor readings with device information
+  - **Sample Response**:
+    ```json
+    {
+      "hive_id": "hive_uuid",
+      "hive_name": "Hive 1",
+      "device_count": 1,
+      "total_readings": 45,
+      "readings": [
+        {
+          "id": "reading_uuid",
+          "device": "device_uuid",
+          "device_serial": "ABC123",
+          "temperature": "35.50",
+          "humidity": "60.00",
+          "weight": "15.20",
+          "sound_level": 70,
+          "battery_level": 80,
+          "status_code": 1,
+          "timestamp": "2025-07-02T14:30:00Z",
+          "created_at": "2025-07-02T14:30:05Z"
+        }
+      ]
+    }
+    ```
+
+- **Get Latest Sensor Reading for Hive**
+  - **URL**: `GET /api/apiaries/hives/{hive_id}/latest_sensor_reading/`
+  - **Authentication**: Required (Bearer token)
+  - **Description**: Get the most recent sensor reading from smart devices assigned to a specific hive
+  - **Response**: Latest sensor reading or null if no readings exist
+  - **Sample Response**:
+    ```json
+    {
+      "hive_id": "hive_uuid",
+      "hive_name": "Hive 1",
+      "has_smart_device": true,
+      "latest_reading": {
+        "id": "reading_uuid",
+        "device": "device_uuid",
+        "device_serial": "ABC123",
+        "temperature": "35.50",
+        "humidity": "60.00",
+        "weight": "15.20",
+        "sound_level": 70,
+        "battery_level": 80,
+        "status_code": 1,
+        "timestamp": "2025-07-02T14:30:00Z",
+        "created_at": "2025-07-02T14:30:05Z"
+      }
+    }
+    ```
+
+### Hive Detail Endpoint with Sensor Readings
+
+- **Get Hive Details with Sensor Data**
+  - **URL**: `GET /api/apiaries/hives/{hive_id}/`
+  - **Authentication**: Required (Bearer token)
+  - **Description**: Get detailed hive information including smart devices and latest sensor reading
+  - **Response**: Hive details with embedded sensor data
+  - **Sample Response**:
+    ```json
+    {
+      "id": "hive_uuid",
+      "apiary": "apiary_uuid",
+      "apiary_name": "Main Apiary",
+      "name": "Hive 1",
+      "type": "LANGSTROTH",
+      "type_display": "Langstroth",
+      "installation_date": "2025-01-15",
+      "has_smart_device": true,
+      "is_active": true,
+      "created_at": "2025-01-15T10:00:00Z",
+      "updated_at": "2025-07-09T15:30:00Z",
+      "smart_devices": [
+        {
+          "id": "device_uuid",
+          "serial_number": "ABC123",
+          "device_type": "v01",
+          "battery_level": 85,
+          "is_active": true,
+          "last_sync_at": "2025-07-09T15:25:00Z",
+          "created_at": "2025-01-20T09:00:00Z"
+        }
+      ],
+      "latest_sensor_reading": {
+        "id": "reading_uuid",
+        "device": "device_uuid",
+        "device_serial": "ABC123",
+        "hive_name": "Hive 1",
+        "temperature": "35.50",
+        "humidity": "60.00",
+        "weight": "15.20",
+        "sound_level": 70,
+        "battery_level": 80,
+        "status_code": 1,
+        "timestamp": "2025-07-09T15:20:00Z",
+        "created_at": "2025-07-09T15:20:05Z"
+      }
+    }
+    ```
+
+  **Note**: The `smart_devices` array will be empty if no active smart devices are assigned to the hive. The `latest_sensor_reading` will be `null` if the hive has no smart device or no sensor readings exist.
+
 ## Integration Guidelines
 
 - Ensure the frontend captures required fields accurately.
@@ -300,3 +413,6 @@ The Smart Devices API returns the following structure:
 - **GET available hives**: `/api/apiaries/apiaries/{apiary_id}/available_hives/` - Get assignable hives
 - **POST create device**: `/api/devices/devices/` - Create the device with optional hive assignment
 - **GET devices**: `/api/devices/devices/` - Verify the created device shows correct hive/apiary names
+- **GET hive details**: `/api/apiaries/hives/{hive_id}/` - Get hive details including smart devices and latest sensor reading
+- **GET hive sensor readings**: `/api/apiaries/hives/{hive_id}/sensor_readings/` - Get sensor readings for a specific hive
+- **GET latest hive sensor reading**: `/api/apiaries/hives/{hive_id}/latest_sensor_reading/` - Get the most recent sensor reading for a hive

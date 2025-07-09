@@ -62,6 +62,35 @@ class ApiariesDetailSerializer(ApiariesSerializer):
 class HivesDetailSerializer(HivesSerializer):
     """Detailed serializer for Hives with apiary details"""
     apiary = ApiariesSerializer(read_only=True)
+    smart_devices = serializers.SerializerMethodField()
+    latest_sensor_reading = serializers.SerializerMethodField()
     
     class Meta(HivesSerializer.Meta):
-        fields = HivesSerializer.Meta.fields + ['apiary']
+        fields = HivesSerializer.Meta.fields + ['apiary', 'smart_devices', 'latest_sensor_reading']
+    
+    def get_smart_devices(self, obj):
+        """Get active smart devices assigned to this hive"""
+        devices = obj.smart_devices.filter(is_active=True)
+        if devices.exists():
+            # Import here to avoid circular imports
+            from devices.serializers import SmartDevicesSerializer
+            return SmartDevicesSerializer(devices, many=True, context=self.context).data
+        return []
+    
+    def get_latest_sensor_reading(self, obj):
+        """Get the latest sensor reading for this hive"""
+        if not obj.has_smart_device:
+            return None
+            
+        # Import here to avoid circular imports
+        from devices.models import SensorReadings
+        from devices.serializers import SensorReadingsSerializer
+        
+        latest_reading = SensorReadings.objects.filter(
+            device__hive=obj,
+            device__is_active=True
+        ).select_related('device').order_by('-timestamp').first()
+        
+        if latest_reading:
+            return SensorReadingsSerializer(latest_reading, context=self.context).data
+        return None

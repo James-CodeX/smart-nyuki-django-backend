@@ -208,3 +208,67 @@ class HivesViewSet(viewsets.ModelViewSet):
             }
         
         return Response(result)
+    
+    @action(detail=True, methods=['get'])
+    def sensor_readings(self, request, pk=None):
+        """Get sensor readings for a specific hive"""
+        hive = self.get_object()
+        
+        # Get all smart devices assigned to this hive
+        from devices.models import SensorReadings
+        from devices.serializers import SensorReadingsSerializer
+        
+        # Get query parameters
+        limit = int(request.GET.get('limit', 10))
+        ordering = request.GET.get('ordering', '-timestamp')
+        
+        # Get sensor readings from all devices assigned to this hive
+        readings = SensorReadings.objects.filter(
+            device__hive=hive,
+            device__is_active=True
+        ).select_related('device').order_by(ordering)[:limit]
+        
+        # Count total readings and devices
+        total_readings = SensorReadings.objects.filter(
+            device__hive=hive,
+            device__is_active=True
+        ).count()
+        
+        device_count = hive.smart_devices.filter(is_active=True).count()
+        
+        # Serialize the readings
+        serializer = SensorReadingsSerializer(readings, many=True)
+        
+        return Response({
+            'hive_id': str(hive.id),
+            'hive_name': hive.name,
+            'device_count': device_count,
+            'total_readings': total_readings,
+            'readings': serializer.data
+        })
+    
+    @action(detail=True, methods=['get'])
+    def latest_sensor_reading(self, request, pk=None):
+        """Get the latest sensor reading for a specific hive"""
+        hive = self.get_object()
+        
+        from devices.models import SensorReadings
+        from devices.serializers import SensorReadingsSerializer
+        
+        # Get the most recent sensor reading from any device assigned to this hive
+        latest_reading = SensorReadings.objects.filter(
+            device__hive=hive,
+            device__is_active=True
+        ).select_related('device').order_by('-timestamp').first()
+        
+        # Serialize the reading if it exists
+        latest_reading_data = None
+        if latest_reading:
+            latest_reading_data = SensorReadingsSerializer(latest_reading).data
+        
+        return Response({
+            'hive_id': str(hive.id),
+            'hive_name': hive.name,
+            'has_smart_device': hive.has_smart_device,
+            'latest_reading': latest_reading_data
+        })
