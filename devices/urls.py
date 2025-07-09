@@ -12,6 +12,7 @@ urlpatterns = [
     # Sensor Readings URLs
     path('sensor-readings/', views.SensorReadingsListCreateView.as_view(), name='sensor-reading-list-create'),
     path('sensor-readings/<uuid:pk>/', views.SensorReadingsDetailView.as_view(), name='sensor-reading-detail'),
+    path('sensor-readings/create/', views.SensorReadingsCreateUnauthenticatedView.as_view(), name='sensor-reading-create-unauthenticated'),
     
     # Audio Recordings URLs
     path('audio-recordings/', views.AudioRecordingsListCreateView.as_view(), name='audio-recording-list-create'),

@@ -6,6 +6,7 @@ from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+from rest_framework.views import APIView
 
 from .models import SmartDevices, SensorReadings, AudioRecordings, DeviceImages
 from .serializers import (
@@ -372,4 +373,32 @@ def device_stats(request, device_id):
         'device_images': device_images,
         'last_reading': last_reading_data,
         'battery_status': battery_status
-    }, status=status.HTTP_200_OK)
+        }, status=status.HTTP_200_OK)
+
+
+class SensorReadingsCreateUnauthenticatedView(APIView):
+    """Create sensor readings without authentication - for IoT devices"""
+    permission_classes = []  # No authentication required
+    
+    @extend_schema(
+        summary="Create sensor reading (unauthenticated)",
+        description="Create a new sensor reading using device serial number without authentication - intended for IoT devices",
+        request=SensorReadingsCreateSerializer,
+        responses={
+            201: SensorReadingsSerializer,
+            400: OpenApiResponse(description="Validation errors"),
+            404: OpenApiResponse(description="Device not found")
+        }
+    )
+    def post(self, request):
+        """Create a sensor reading without authentication"""
+        serializer = SensorReadingsCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            # Create the sensor reading
+            sensor_reading = serializer.save()
+            
+            # Return the created reading using the regular serializer
+            response_serializer = SensorReadingsSerializer(sensor_reading)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
