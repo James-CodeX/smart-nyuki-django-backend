@@ -407,6 +407,164 @@ The Smart Devices API returns the following structure:
 5. **Handle edge cases** - What if no hives are available in the selected apiary?
 6. **Validate on submit** - Ensure required fields are filled before submission
 
+## Apiary Smart Metrics
+
+### Get Apiary Smart Metrics
+
+- **URL**: `GET /api/apiaries/apiaries/{apiary_id}/smart_metrics/`
+- **Authentication**: Required (Bearer token)
+- **Description**: Get comprehensive smart metrics for an apiary based on its smart hives
+- **Response**: Detailed metrics including current, 24h, and weekly averages
+- **Sample Response**:
+  ```json
+  {
+    "apiary_id": "apiary_uuid",
+    "apiary_name": "Main Apiary",
+    "smart_status": "fully_smart",
+    "smart_status_display": "Fully Smart",
+    "hive_counts": {
+      "total_hives": 5,
+      "smart_hives": 5,
+      "non_smart_hives": 0,
+      "smart_percentage": 100.0
+    },
+    "current_metrics": {
+      "average_temperature": 35.2,
+      "average_humidity": 62.5,
+      "total_weight": 87.4,
+      "average_weight": 17.48,
+      "average_sound_level": 45.3,
+      "temperature_range": {
+        "min": 32.1,
+        "max": 38.9
+      },
+      "humidity_range": {
+        "min": 58.2,
+        "max": 67.8
+      }
+    },
+    "last_24h_metrics": {
+      "average_temperature": 34.8,
+      "average_humidity": 63.1,
+      "total_weight": 86.9,
+      "average_weight": 17.38,
+      "average_sound_level": 44.7,
+      "readings_count": 120
+    },
+    "last_week_metrics": {
+      "average_temperature": 35.0,
+      "average_humidity": 62.8,
+      "total_weight": 87.1,
+      "average_weight": 17.42,
+      "average_sound_level": 45.1,
+      "readings_count": 840
+    },
+    "hive_latest_readings": [
+      {
+        "hive_id": "hive_uuid_1",
+        "hive_name": "Hive 1",
+        "latest_reading": {
+          "id": "reading_uuid",
+          "device": "device_uuid",
+          "device_serial": "ABC123",
+          "hive_name": "Hive 1",
+          "temperature": "35.50",
+          "humidity": "60.00",
+          "weight": "15.20",
+          "sound_level": 70,
+          "battery_level": 80,
+          "status_code": 1,
+          "timestamp": "2025-07-09T15:20:00Z",
+          "created_at": "2025-07-09T15:20:05Z"
+        }
+      }
+    ],
+    "total_readings": 1250,
+    "last_updated": "2025-07-09T15:20:00Z"
+  }
+  ```
+
+### Smart Status Values
+
+- **`no_hives`**: Apiary has no active hives
+- **`not_smart`**: Apiary has hives but none have smart devices
+- **`partially_smart`**: Some hives have smart devices, others don't
+- **`fully_smart`**: All hives in the apiary have smart devices
+
+### Get Apiaries Smart Overview
+
+- **URL**: `GET /api/apiaries/apiaries/smart_overview/`
+- **Authentication**: Required (Bearer token)
+- **Description**: Get smart status overview for all user's apiaries
+- **Response**: Summary of all apiaries with smart status and counts
+- **Sample Response**:
+  ```json
+  {
+    "apiaries": [
+      {
+        "apiary_id": "apiary_uuid_1",
+        "apiary_name": "Main Apiary",
+        "smart_status": "fully_smart",
+        "smart_status_display": "Fully Smart",
+        "hive_counts": {
+          "total_hives": 5,
+          "smart_hives": 5,
+          "non_smart_hives": 0,
+          "smart_percentage": 100.0
+        },
+        "total_readings": 1250,
+        "has_metrics": true
+      },
+      {
+        "apiary_id": "apiary_uuid_2",
+        "apiary_name": "Secondary Apiary",
+        "smart_status": "partially_smart",
+        "smart_status_display": "Partially Smart",
+        "hive_counts": {
+          "total_hives": 3,
+          "smart_hives": 2,
+          "non_smart_hives": 1,
+          "smart_percentage": 66.67
+        },
+        "total_readings": 800,
+        "has_metrics": true
+      }
+    ],
+    "summary": {
+      "total_apiaries": 2,
+      "fully_smart_apiaries": 1,
+      "partially_smart_apiaries": 1,
+      "not_smart_apiaries": 0,
+      "no_hives_apiaries": 0,
+      "total_hives": 8,
+      "total_smart_hives": 7,
+      "total_readings": 2050,
+      "smart_apiaries_percentage": 100.0
+    }
+  }
+  ```
+
+### Metrics Calculation Rules
+
+1. **Current Metrics**: Based on the latest 100 sensor readings from all smart devices in the apiary
+2. **24h Metrics**: Based on all sensor readings from the last 24 hours
+3. **Weekly Metrics**: Based on all sensor readings from the last 7 days
+4. **Total Weight**: Sum of all hive weights (useful for production tracking)
+5. **Average Weight**: Average weight per hive
+6. **Temperature/Humidity Ranges**: Min/max values from current readings
+7. **Smart Status**: Determined by the ratio of smart hives to total hives
+
+### Frontend Integration Guidelines
+
+1. **Use Smart Status for UI**: Display different indicators based on smart_status
+2. **Show Progress Indicators**: Use smart_percentage for progress bars
+3. **Handle Null Metrics**: Current/24h/weekly metrics can be null if no data exists
+4. **Display Ranges**: Show temperature and humidity ranges for better insights
+5. **Time-based Filtering**: Use different time periods for different dashboard views
+6. **Hive-level Details**: Use hive_latest_readings for individual hive status
+7. **Loading States**: Show loading while fetching comprehensive metrics
+8. **Error Handling**: Handle cases where apiaries have no smart devices
+
 ### API Integration Summary
 
 - **GET apiaries**: `/api/apiaries/apiaries/` - Get user's apiaries for the dropdown
@@ -416,3 +574,5 @@ The Smart Devices API returns the following structure:
 - **GET hive details**: `/api/apiaries/hives/{hive_id}/` - Get hive details including smart devices and latest sensor reading
 - **GET hive sensor readings**: `/api/apiaries/hives/{hive_id}/sensor_readings/` - Get sensor readings for a specific hive
 - **GET latest hive sensor reading**: `/api/apiaries/hives/{hive_id}/latest_sensor_reading/` - Get the most recent sensor reading for a hive
+- **GET apiary smart metrics**: `/api/apiaries/apiaries/{apiary_id}/smart_metrics/` - Get comprehensive smart metrics for an apiary
+- **GET apiaries smart overview**: `/api/apiaries/apiaries/smart_overview/` - Get smart status overview for all user's apiaries

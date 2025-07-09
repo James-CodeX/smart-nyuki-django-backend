@@ -145,6 +145,345 @@ class ApiariesViewSet(viewsets.ModelViewSet):
             'total_hives': total_hives,
             'average_hives_per_apiary': round(total_hives / total_apiaries, 2) if total_apiaries > 0 else 0
         })
+    
+    @action(detail=True, methods=['get'])
+    def smart_metrics(self, request, pk=None):
+        """Get smart metrics for an apiary based on its smart hives"""
+        from django.db.models import Avg, Sum, Count, Min, Max
+        from devices.models import SensorReadings
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        apiary = self.get_object()
+        
+        # Get active hives in this apiary
+        active_hives = apiary.hives.filter(is_active=True)
+        smart_hives = active_hives.filter(has_smart_device=True)
+        
+        # Determine apiary smart status
+        total_hives = active_hives.count()
+        smart_hives_count = smart_hives.count()
+        
+        if total_hives == 0:
+            smart_status = 'no_hives'
+        elif smart_hives_count == 0:
+            smart_status = 'not_smart'
+        elif smart_hives_count == total_hives:
+            smart_status = 'fully_smart'
+        else:
+            smart_status = 'partially_smart'
+        
+        # Get time filters
+        now = timezone.now()
+        last_24h = now - timedelta(hours=24)
+        last_week = now - timedelta(days=7)
+        
+        # Get sensor readings from all smart devices in this apiary
+        readings_queryset = SensorReadings.objects.filter(
+            device__hive__apiary=apiary,
+            device__hive__is_active=True,
+            device__is_active=True
+        )
+        
+        # Calculate metrics
+        latest_readings = readings_queryset.order_by('-timestamp')[:100]  # Get recent readings for averages
+        readings_last_24h = readings_queryset.filter(timestamp__gte=last_24h)
+        readings_last_week = readings_queryset.filter(timestamp__gte=last_week)
+        
+        # Calculate current metrics (from latest readings)
+        current_metrics = None
+        if latest_readings.exists():
+            # Calculate averages and total weight from latest readings of each smart hive
+            total_temperature, total_humidity, total_sound_level, total_weight = 0.0, 0.0, 0.0, 0.0
+            temp_count_current, humidity_count_current, sound_count_current = 0, 0, 0
+            
+            for hive in smart_hives:
+                latest_reading = SensorReadings.objects.filter(
+                    device__hive=hive,
+                    device__is_active=True
+                ).order_by('-timestamp').first()
+                
+                if latest_reading:
+                    if latest_reading.temperature:
+                        total_temperature += float(latest_reading.temperature)
+                        temp_count_current += 1
+                    if latest_reading.humidity:
+                        total_humidity += float(latest_reading.humidity)
+                        humidity_count_current += 1
+                    if latest_reading.sound_level:
+                        total_sound_level += float(latest_reading.sound_level)
+                        sound_count_current += 1
+                    if latest_reading.weight:
+                        total_weight += float(latest_reading.weight)
+            
+            avg_temperature = total_temperature / temp_count_current if temp_count_current > 0 else 0
+            avg_humidity = total_humidity / humidity_count_current if humidity_count_current > 0 else 0
+            avg_sound_level = total_sound_level / sound_count_current if sound_count_current > 0 else 0
+
+            # Get min/max values from all recent readings for ranges
+            range_stats = latest_readings.aggregate(
+                min_temperature=Min('temperature'),
+                max_temperature=Max('temperature'),
+                min_humidity=Min('humidity'),
+                max_humidity=Max('humidity'),
+                avg_weight=Avg('weight')
+            )
+            
+            current_stats = {
+                'avg_temperature': avg_temperature,
+                'avg_humidity': avg_humidity,
+                'avg_weight': range_stats['avg_weight'],
+                'avg_sound_level': avg_sound_level,
+                'min_temperature': range_stats['min_temperature'],
+                'max_temperature': range_stats['max_temperature'],
+                'min_humidity': range_stats['min_humidity'],
+                'max_humidity': range_stats['max_humidity'],
+                'total_weight': total_weight
+            }
+            
+            current_metrics = {
+                'average_temperature': round(float(current_stats['avg_temperature'] or 0), 2),
+                'average_humidity': round(float(current_stats['avg_humidity'] or 0), 2),
+                'total_weight': round(total_weight, 2),
+                'average_weight': round(float(current_stats['avg_weight'] or 0), 2),
+                'average_sound_level': round(float(current_stats['avg_sound_level'] or 0), 2),
+                'temperature_range': {
+                    'min': round(float(current_stats['min_temperature'] or 0), 2),
+                    'max': round(float(current_stats['max_temperature'] or 0), 2)
+                },
+                'humidity_range': {
+                    'min': round(float(current_stats['min_humidity'] or 0), 2),
+                    'max': round(float(current_stats['max_humidity'] or 0), 2)
+                }
+            }
+        
+        # Calculate 24h metrics
+        metrics_24h = None
+        if readings_last_24h.exists():
+            # Calculate averages and total weight from latest readings of each smart hive (within 24h)
+            total_temperature_24h, total_humidity_24h, total_sound_level_24h, total_weight_24h = 0.0, 0.0, 0.0, 0.0
+            temp_count, humidity_count, sound_count = 0, 0, 0
+            
+            for hive in smart_hives:
+                latest_reading = SensorReadings.objects.filter(
+                    device__hive=hive,
+                    device__is_active=True,
+                    timestamp__gte=last_24h
+                ).order_by('-timestamp').first()
+                
+                if latest_reading:
+                    if latest_reading.temperature:
+                        total_temperature_24h += float(latest_reading.temperature)
+                        temp_count += 1
+                    if latest_reading.humidity:
+                        total_humidity_24h += float(latest_reading.humidity)
+                        humidity_count += 1
+                    if latest_reading.sound_level:
+                        total_sound_level_24h += float(latest_reading.sound_level)
+                        sound_count += 1
+                    if latest_reading.weight:
+                        total_weight_24h += float(latest_reading.weight)
+            
+            avg_temperature_24h = total_temperature_24h / temp_count if temp_count > 0 else 0
+            avg_humidity_24h = total_humidity_24h / humidity_count if humidity_count > 0 else 0
+            avg_sound_level_24h = total_sound_level_24h / sound_count if sound_count > 0 else 0
+            
+            # Get average weight from all 24h readings
+            avg_weight_24h = readings_last_24h.aggregate(Avg('weight'))['weight__avg'] or 0
+            
+            stats_24h = {
+                'avg_temperature': avg_temperature_24h,
+                'avg_humidity': avg_humidity_24h,
+                'avg_weight': avg_weight_24h,
+                'avg_sound_level': avg_sound_level_24h
+            }
+            
+            metrics_24h = {
+                'average_temperature': round(float(stats_24h['avg_temperature'] or 0), 2),
+                'average_humidity': round(float(stats_24h['avg_humidity'] or 0), 2),
+                'total_weight': round(total_weight_24h, 2),
+                'average_weight': round(float(stats_24h['avg_weight'] or 0), 2),
+                'average_sound_level': round(float(stats_24h['avg_sound_level'] or 0), 2),
+                'readings_count': readings_last_24h.count()
+            }
+        
+        # Calculate weekly metrics
+        metrics_week = None
+        if readings_last_week.exists():
+            # Calculate averages and total weight from latest readings of each smart hive (within last week)
+            total_temperature_week, total_humidity_week, total_sound_level_week, total_weight_week = 0.0, 0.0, 0.0, 0.0
+            temp_count_week, humidity_count_week, sound_count_week = 0, 0, 0
+            
+            for hive in smart_hives:
+                latest_reading = SensorReadings.objects.filter(
+                    device__hive=hive,
+                    device__is_active=True,
+                    timestamp__gte=last_week
+                ).order_by('-timestamp').first()
+                
+                if latest_reading:
+                    if latest_reading.temperature:
+                        total_temperature_week += float(latest_reading.temperature)
+                        temp_count_week += 1
+                    if latest_reading.humidity:
+                        total_humidity_week += float(latest_reading.humidity)
+                        humidity_count_week += 1
+                    if latest_reading.sound_level:
+                        total_sound_level_week += float(latest_reading.sound_level)
+                        sound_count_week += 1
+                    if latest_reading.weight:
+                        total_weight_week += float(latest_reading.weight)
+            
+            avg_temperature_week = total_temperature_week / temp_count_week if temp_count_week > 0 else 0
+            avg_humidity_week = total_humidity_week / humidity_count_week if humidity_count_week > 0 else 0
+            avg_sound_level_week = total_sound_level_week / sound_count_week if sound_count_week > 0 else 0
+            
+            # Get average weight from all weekly readings
+            avg_weight_week = readings_last_week.aggregate(Avg('weight'))['weight__avg'] or 0
+            
+            stats_week = {
+                'avg_temperature': avg_temperature_week,
+                'avg_humidity': avg_humidity_week,
+                'avg_weight': avg_weight_week,
+                'avg_sound_level': avg_sound_level_week
+            }
+            
+            metrics_week = {
+                'average_temperature': round(float(stats_week['avg_temperature'] or 0), 2),
+                'average_humidity': round(float(stats_week['avg_humidity'] or 0), 2),
+                'total_weight': round(total_weight_week, 2),
+                'average_weight': round(float(stats_week['avg_weight'] or 0), 2),
+                'average_sound_level': round(float(stats_week['avg_sound_level'] or 0), 2),
+                'readings_count': readings_last_week.count()
+            }
+        
+        # Get latest reading from each smart hive
+        hive_latest_readings = []
+        for hive in smart_hives:
+            latest_reading = SensorReadings.objects.filter(
+                device__hive=hive,
+                device__is_active=True
+            ).order_by('-timestamp').first()
+            
+            if latest_reading:
+                from devices.serializers import SensorReadingsSerializer
+                hive_latest_readings.append({
+                    'hive_id': str(hive.id),
+                    'hive_name': hive.name,
+                    'latest_reading': SensorReadingsSerializer(latest_reading).data
+                })
+        
+        return Response({
+            'apiary_id': str(apiary.id),
+            'apiary_name': apiary.name,
+            'smart_status': smart_status,
+            'smart_status_display': {
+                'no_hives': 'No Hives',
+                'not_smart': 'Not Smart',
+                'partially_smart': 'Partially Smart',
+                'fully_smart': 'Fully Smart'
+            }.get(smart_status, 'Unknown'),
+            'hive_counts': {
+                'total_hives': total_hives,
+                'smart_hives': smart_hives_count,
+                'non_smart_hives': total_hives - smart_hives_count,
+                'smart_percentage': round((smart_hives_count / total_hives * 100), 2) if total_hives > 0 else 0
+            },
+            'current_metrics': current_metrics,
+            'last_24h_metrics': metrics_24h,
+            'last_week_metrics': metrics_week,
+            'hive_latest_readings': hive_latest_readings,
+            'total_readings': readings_queryset.count(),
+            'last_updated': latest_readings.first().timestamp if latest_readings.exists() else None
+        })
+    
+    @action(detail=False, methods=['get'])
+    def smart_overview(self, request):
+        """Get smart overview for all user's apiaries"""
+        apiaries = self.get_queryset()
+        
+        overview_data = []
+        totals = {
+            'total_apiaries': 0,
+            'fully_smart': 0,
+            'partially_smart': 0,
+            'not_smart': 0,
+            'no_hives': 0,
+            'total_hives': 0,
+            'total_smart_hives': 0,
+            'total_readings': 0
+        }
+        
+        for apiary in apiaries:
+            # Get hive counts
+            active_hives = apiary.hives.filter(is_active=True)
+            smart_hives = active_hives.filter(has_smart_device=True)
+            
+            total_hives = active_hives.count()
+            smart_hives_count = smart_hives.count()
+            
+            # Determine smart status
+            if total_hives == 0:
+                smart_status = 'no_hives'
+            elif smart_hives_count == 0:
+                smart_status = 'not_smart'
+            elif smart_hives_count == total_hives:
+                smart_status = 'fully_smart'
+            else:
+                smart_status = 'partially_smart'
+            
+            # Get basic sensor data count
+            from devices.models import SensorReadings
+            readings_count = SensorReadings.objects.filter(
+                device__hive__apiary=apiary,
+                device__hive__is_active=True,
+                device__is_active=True
+            ).count()
+            
+            # Add to overview
+            overview_data.append({
+                'apiary_id': str(apiary.id),
+                'apiary_name': apiary.name,
+                'smart_status': smart_status,
+                'smart_status_display': {
+                    'no_hives': 'No Hives',
+                    'not_smart': 'Not Smart',
+                    'partially_smart': 'Partially Smart',
+                    'fully_smart': 'Fully Smart'
+                }.get(smart_status, 'Unknown'),
+                'hive_counts': {
+                    'total_hives': total_hives,
+                    'smart_hives': smart_hives_count,
+                    'non_smart_hives': total_hives - smart_hives_count,
+                    'smart_percentage': round((smart_hives_count / total_hives * 100), 2) if total_hives > 0 else 0
+                },
+                'total_readings': readings_count,
+                'has_metrics': smart_hives_count > 0
+            })
+            
+            # Update totals
+            totals['total_apiaries'] += 1
+            totals[smart_status] += 1
+            totals['total_hives'] += total_hives
+            totals['total_smart_hives'] += smart_hives_count
+            totals['total_readings'] += readings_count
+        
+        return Response({
+            'apiaries': overview_data,
+            'summary': {
+                'total_apiaries': totals['total_apiaries'],
+                'fully_smart_apiaries': totals['fully_smart'],
+                'partially_smart_apiaries': totals['partially_smart'],
+                'not_smart_apiaries': totals['not_smart'],
+                'no_hives_apiaries': totals['no_hives'],
+                'total_hives': totals['total_hives'],
+                'total_smart_hives': totals['total_smart_hives'],
+                'total_readings': totals['total_readings'],
+                'smart_apiaries_percentage': round(
+                    ((totals['fully_smart'] + totals['partially_smart']) / totals['total_apiaries'] * 100), 2
+                ) if totals['total_apiaries'] > 0 else 0
+            }
+        })
 
 
 class HivesViewSet(viewsets.ModelViewSet):
