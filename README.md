@@ -345,6 +345,7 @@ The Smart Nyuki system is implemented in stages:
         "coordinates": [40.12345678, -74.12345678],
         "address": "123 Farm Road, City, State",
         "description": "Main production apiary with 10 hives",
+        "hives_count": 8,
         "created_at": "2025-01-01T00:00:00Z",
         "updated_at": "2025-01-01T00:00:00Z"
       }
@@ -387,6 +388,7 @@ The Smart Nyuki system is implemented in stages:
     "coordinates": [40.12345678, -74.12345678],
     "address": "123 Farm Road, City, State",
     "description": "Main production apiary with 10 hives",
+    "hives_count": 8,
     "hives": [
       {
         "id": "uuid",
