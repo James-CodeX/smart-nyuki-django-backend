@@ -185,59 +185,67 @@ class ApiariesViewSet(viewsets.ModelViewSet):
             device__is_active=True
         )
         
-        # Calculate metrics
-        latest_readings = readings_queryset.order_by('-timestamp')[:100]  # Get recent readings for averages
+        # Calculate metrics - Get latest reading from each smart hive
+        latest_readings = []
+        for hive in smart_hives:
+            latest_reading = SensorReadings.objects.filter(
+                device__hive=hive,
+                device__is_active=True
+            ).order_by('-timestamp').first()
+            if latest_reading:
+                latest_readings.append(latest_reading)
+        
         readings_last_24h = readings_queryset.filter(timestamp__gte=last_24h)
         readings_last_week = readings_queryset.filter(timestamp__gte=last_week)
         
-        # Calculate current metrics (from latest readings)
+        # Calculate current metrics (from latest readings of each hive)
         current_metrics = None
-        if latest_readings.exists():
+        if latest_readings:
             # Calculate averages and total weight from latest readings of each smart hive
             total_temperature, total_humidity, total_sound_level, total_weight = 0.0, 0.0, 0.0, 0.0
             temp_count_current, humidity_count_current, sound_count_current = 0, 0, 0
             
-            for hive in smart_hives:
-                latest_reading = SensorReadings.objects.filter(
-                    device__hive=hive,
-                    device__is_active=True
-                ).order_by('-timestamp').first()
-                
-                if latest_reading:
-                    if latest_reading.temperature:
-                        total_temperature += float(latest_reading.temperature)
-                        temp_count_current += 1
-                    if latest_reading.humidity:
-                        total_humidity += float(latest_reading.humidity)
-                        humidity_count_current += 1
-                    if latest_reading.sound_level:
-                        total_sound_level += float(latest_reading.sound_level)
-                        sound_count_current += 1
-                    if latest_reading.weight:
-                        total_weight += float(latest_reading.weight)
+            # Collect all values for min/max calculations
+            temperatures = []
+            humidities = []
+            weights = []
+            
+            for latest_reading in latest_readings:
+                if latest_reading.temperature:
+                    total_temperature += float(latest_reading.temperature)
+                    temp_count_current += 1
+                    temperatures.append(float(latest_reading.temperature))
+                if latest_reading.humidity:
+                    total_humidity += float(latest_reading.humidity)
+                    humidity_count_current += 1
+                    humidities.append(float(latest_reading.humidity))
+                if latest_reading.sound_level:
+                    total_sound_level += float(latest_reading.sound_level)
+                    sound_count_current += 1
+                if latest_reading.weight:
+                    total_weight += float(latest_reading.weight)
+                    weights.append(float(latest_reading.weight))
             
             avg_temperature = total_temperature / temp_count_current if temp_count_current > 0 else 0
             avg_humidity = total_humidity / humidity_count_current if humidity_count_current > 0 else 0
             avg_sound_level = total_sound_level / sound_count_current if sound_count_current > 0 else 0
+            avg_weight = sum(weights) / len(weights) if weights else 0
 
-            # Get min/max values from all recent readings for ranges
-            range_stats = latest_readings.aggregate(
-                min_temperature=Min('temperature'),
-                max_temperature=Max('temperature'),
-                min_humidity=Min('humidity'),
-                max_humidity=Max('humidity'),
-                avg_weight=Avg('weight')
-            )
+            # Calculate min/max values from latest readings
+            min_temperature = min(temperatures) if temperatures else 0
+            max_temperature = max(temperatures) if temperatures else 0
+            min_humidity = min(humidities) if humidities else 0
+            max_humidity = max(humidities) if humidities else 0
             
             current_stats = {
                 'avg_temperature': avg_temperature,
                 'avg_humidity': avg_humidity,
-                'avg_weight': range_stats['avg_weight'],
+                'avg_weight': avg_weight,
                 'avg_sound_level': avg_sound_level,
-                'min_temperature': range_stats['min_temperature'],
-                'max_temperature': range_stats['max_temperature'],
-                'min_humidity': range_stats['min_humidity'],
-                'max_humidity': range_stats['max_humidity'],
+                'min_temperature': min_temperature,
+                'max_temperature': max_temperature,
+                'min_humidity': min_humidity,
+                'max_humidity': max_humidity,
                 'total_weight': total_weight
             }
             
@@ -257,101 +265,43 @@ class ApiariesViewSet(viewsets.ModelViewSet):
                 }
             }
         
-        # Calculate 24h metrics
+        # Calculate 24h metrics - Use ALL readings from last 24 hours
         metrics_24h = None
         if readings_last_24h.exists():
-            # Calculate averages and total weight from latest readings of each smart hive (within 24h)
-            total_temperature_24h, total_humidity_24h, total_sound_level_24h, total_weight_24h = 0.0, 0.0, 0.0, 0.0
-            temp_count, humidity_count, sound_count = 0, 0, 0
-            
-            for hive in smart_hives:
-                latest_reading = SensorReadings.objects.filter(
-                    device__hive=hive,
-                    device__is_active=True,
-                    timestamp__gte=last_24h
-                ).order_by('-timestamp').first()
-                
-                if latest_reading:
-                    if latest_reading.temperature:
-                        total_temperature_24h += float(latest_reading.temperature)
-                        temp_count += 1
-                    if latest_reading.humidity:
-                        total_humidity_24h += float(latest_reading.humidity)
-                        humidity_count += 1
-                    if latest_reading.sound_level:
-                        total_sound_level_24h += float(latest_reading.sound_level)
-                        sound_count += 1
-                    if latest_reading.weight:
-                        total_weight_24h += float(latest_reading.weight)
-            
-            avg_temperature_24h = total_temperature_24h / temp_count if temp_count > 0 else 0
-            avg_humidity_24h = total_humidity_24h / humidity_count if humidity_count > 0 else 0
-            avg_sound_level_24h = total_sound_level_24h / sound_count if sound_count > 0 else 0
-            
-            # Get average weight from all 24h readings
-            avg_weight_24h = readings_last_24h.aggregate(Avg('weight'))['weight__avg'] or 0
-            
-            stats_24h = {
-                'avg_temperature': avg_temperature_24h,
-                'avg_humidity': avg_humidity_24h,
-                'avg_weight': avg_weight_24h,
-                'avg_sound_level': avg_sound_level_24h
-            }
+            # Calculate averages from ALL readings in the last 24 hours
+            stats_24h = readings_last_24h.aggregate(
+                avg_temperature=Avg('temperature'),
+                avg_humidity=Avg('humidity'),
+                avg_weight=Avg('weight'),
+                avg_sound_level=Avg('sound_level'),
+                total_weight=Sum('weight')
+            )
             
             metrics_24h = {
                 'average_temperature': round(float(stats_24h['avg_temperature'] or 0), 2),
                 'average_humidity': round(float(stats_24h['avg_humidity'] or 0), 2),
-                'total_weight': round(total_weight_24h, 2),
+                'total_weight': round(float(stats_24h['total_weight'] or 0), 2),
                 'average_weight': round(float(stats_24h['avg_weight'] or 0), 2),
                 'average_sound_level': round(float(stats_24h['avg_sound_level'] or 0), 2),
                 'readings_count': readings_last_24h.count()
             }
         
-        # Calculate weekly metrics
+        # Calculate weekly metrics - Use ALL readings from last 7 days
         metrics_week = None
         if readings_last_week.exists():
-            # Calculate averages and total weight from latest readings of each smart hive (within last week)
-            total_temperature_week, total_humidity_week, total_sound_level_week, total_weight_week = 0.0, 0.0, 0.0, 0.0
-            temp_count_week, humidity_count_week, sound_count_week = 0, 0, 0
-            
-            for hive in smart_hives:
-                latest_reading = SensorReadings.objects.filter(
-                    device__hive=hive,
-                    device__is_active=True,
-                    timestamp__gte=last_week
-                ).order_by('-timestamp').first()
-                
-                if latest_reading:
-                    if latest_reading.temperature:
-                        total_temperature_week += float(latest_reading.temperature)
-                        temp_count_week += 1
-                    if latest_reading.humidity:
-                        total_humidity_week += float(latest_reading.humidity)
-                        humidity_count_week += 1
-                    if latest_reading.sound_level:
-                        total_sound_level_week += float(latest_reading.sound_level)
-                        sound_count_week += 1
-                    if latest_reading.weight:
-                        total_weight_week += float(latest_reading.weight)
-            
-            avg_temperature_week = total_temperature_week / temp_count_week if temp_count_week > 0 else 0
-            avg_humidity_week = total_humidity_week / humidity_count_week if humidity_count_week > 0 else 0
-            avg_sound_level_week = total_sound_level_week / sound_count_week if sound_count_week > 0 else 0
-            
-            # Get average weight from all weekly readings
-            avg_weight_week = readings_last_week.aggregate(Avg('weight'))['weight__avg'] or 0
-            
-            stats_week = {
-                'avg_temperature': avg_temperature_week,
-                'avg_humidity': avg_humidity_week,
-                'avg_weight': avg_weight_week,
-                'avg_sound_level': avg_sound_level_week
-            }
+            # Calculate averages from ALL readings in the last 7 days
+            stats_week = readings_last_week.aggregate(
+                avg_temperature=Avg('temperature'),
+                avg_humidity=Avg('humidity'),
+                avg_weight=Avg('weight'),
+                avg_sound_level=Avg('sound_level'),
+                total_weight=Sum('weight')
+            )
             
             metrics_week = {
                 'average_temperature': round(float(stats_week['avg_temperature'] or 0), 2),
                 'average_humidity': round(float(stats_week['avg_humidity'] or 0), 2),
-                'total_weight': round(total_weight_week, 2),
+                'total_weight': round(float(stats_week['total_weight'] or 0), 2),
                 'average_weight': round(float(stats_week['avg_weight'] or 0), 2),
                 'average_sound_level': round(float(stats_week['avg_sound_level'] or 0), 2),
                 'readings_count': readings_last_week.count()
@@ -394,7 +344,7 @@ class ApiariesViewSet(viewsets.ModelViewSet):
             'last_week_metrics': metrics_week,
             'hive_latest_readings': hive_latest_readings,
             'total_readings': readings_queryset.count(),
-            'last_updated': latest_readings.first().timestamp if latest_readings.exists() else None
+            'last_updated': latest_readings[0].timestamp if latest_readings else None
         })
     
     @action(detail=False, methods=['get'])
