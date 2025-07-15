@@ -81,6 +81,8 @@ class Alerts(models.Model):
         TEMPERATURE = 'Temperature', 'Temperature'
         HUMIDITY = 'Humidity', 'Humidity'
         WEIGHT = 'Weight', 'Weight'
+        SOUND = 'Sound', 'Sound'
+        BATTERY = 'Battery', 'Battery'
         INSPECTION_DUE = 'Inspection_Due', 'Inspection Due'
         PEST_RISK = 'Pest_Risk', 'Pest Risk'
         SWARM_RISK = 'Swarm_Risk', 'Swarm Risk'

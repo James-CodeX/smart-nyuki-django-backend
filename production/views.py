@@ -15,6 +15,14 @@ from .serializers import (
     AlertResolveSerializer
 )
 from accounts.models import BeekeeperProfile
+from .services.alert_checker import AlertChecker
+
+# Optional Celery imports
+try:
+    from .tasks import check_alerts_task, check_hive_alerts_task
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
 
 
 class HarvestsViewSet(viewsets.ModelViewSet):
@@ -256,6 +264,151 @@ class AlertsViewSet(viewsets.ModelViewSet):
             'by_severity': severity_stats,
             'by_type': type_stats
         })
+    
+    @action(detail=False, methods=['post'])
+    def check_all_alerts(self, request):
+        """Manually trigger alert check for all user's hives"""
+        try:
+            # Use synchronous alert checking for immediate response
+            alert_checker = AlertChecker()
+            
+            # Get only user's hives
+            from apiaries.models import Hives
+            user_hives = Hives.objects.filter(
+                apiary__beekeeper__user=request.user,
+                is_active=True,
+                has_smart_device=True
+            )
+            
+            if not user_hives.exists():
+                return Response({
+                    'message': 'No active hives with smart devices found',
+                    'alerts_created': 0,
+                    'hives_checked': 0
+                }, status=status.HTTP_200_OK)
+            
+            total_alerts_created = 0
+            hives_checked = 0
+            
+            for hive in user_hives:
+                alerts_created = alert_checker.check_hive_alerts(hive)
+                total_alerts_created += alerts_created
+                hives_checked += 1
+            
+            return Response({
+                'message': f'Alert check completed for {hives_checked} hives',
+                'alerts_created': total_alerts_created,
+                'hives_checked': hives_checked,
+                'timestamp': timezone.now()
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Error during alert check: {str(e)}',
+                'timestamp': timezone.now()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def check_hive_alerts(self, request):
+        """Manually trigger alert check for a specific hive"""
+        hive_id = request.data.get('hive_id')
+        
+        if not hive_id:
+            return Response({
+                'error': 'hive_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from apiaries.models import Hives
+            hive = Hives.objects.get(
+                id=hive_id,
+                apiary__beekeeper__user=request.user
+            )
+            
+            if not hive.is_active:
+                return Response({
+                    'error': 'Hive is not active',
+                    'hive_id': hive_id
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not hive.has_smart_device:
+                return Response({
+                    'error': 'Hive does not have a smart device',
+                    'hive_id': hive_id
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            alert_checker = AlertChecker()
+            alerts_created = alert_checker.check_hive_alerts(hive)
+            
+            return Response({
+                'message': f'Alert check completed for hive {hive.name}',
+                'alerts_created': alerts_created,
+                'hive_id': hive_id,
+                'hive_name': hive.name,
+                'timestamp': timezone.now()
+            }, status=status.HTTP_200_OK)
+            
+        except Hives.DoesNotExist:
+            return Response({
+                'error': 'Hive not found or not owned by user',
+                'hive_id': hive_id
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'error': f'Error during hive alert check: {str(e)}',
+                'hive_id': hive_id,
+                'timestamp': timezone.now()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def schedule_alert_check(self, request):
+        """Schedule an asynchronous alert check using Celery"""
+        if not CELERY_AVAILABLE:
+            return Response({
+                'error': 'Celery is not available. Use check_all_alerts or check_hive_alerts for synchronous execution.',
+                'timestamp': timezone.now()
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+        try:
+            hive_id = request.data.get('hive_id')
+            
+            if hive_id:
+                # Schedule check for specific hive
+                from apiaries.models import Hives
+                hive = Hives.objects.get(
+                    id=hive_id,
+                    apiary__beekeeper__user=request.user
+                )
+                
+                task = check_hive_alerts_task.delay(hive_id)
+                
+                return Response({
+                    'message': f'Alert check scheduled for hive {hive.name}',
+                    'task_id': task.id,
+                    'hive_id': hive_id,
+                    'hive_name': hive.name,
+                    'timestamp': timezone.now()
+                }, status=status.HTTP_202_ACCEPTED)
+            else:
+                # Schedule check for all hives
+                task = check_alerts_task.delay()
+                
+                return Response({
+                    'message': 'Alert check scheduled for all hives',
+                    'task_id': task.id,
+                    'timestamp': timezone.now()
+                }, status=status.HTTP_202_ACCEPTED)
+                
+        except Hives.DoesNotExist:
+            return Response({
+                'error': 'Hive not found or not owned by user',
+                'hive_id': hive_id
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'error': f'Error scheduling alert check: {str(e)}',
+                'timestamp': timezone.now()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
