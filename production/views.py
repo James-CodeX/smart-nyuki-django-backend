@@ -361,6 +361,47 @@ class AlertsViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['post'])
+    def resolve_all(self, request):
+        """Resolve all active alerts for the user"""
+        # Get all active alerts for the user
+        active_alerts = self.get_queryset().filter(is_resolved=False)
+        
+        if not active_alerts.exists():
+            return Response({
+                'message': 'No active alerts to resolve',
+                'alerts_resolved': 0,
+                'timestamp': timezone.now()
+            }, status=status.HTTP_200_OK)
+        
+        # Get optional resolution notes from request
+        resolution_notes = request.data.get('resolution_notes', 'Bulk resolved by user')
+        
+        try:
+            # Resolve all alerts
+            alerts_count = active_alerts.count()
+            
+            # Update all alerts in bulk
+            active_alerts.update(
+                is_resolved=True,
+                resolved_at=timezone.now(),
+                resolved_by=request.user,
+                resolution_notes=resolution_notes
+            )
+            
+            return Response({
+                'message': f'Successfully resolved {alerts_count} alerts',
+                'alerts_resolved': alerts_count,
+                'resolution_notes': resolution_notes,
+                'timestamp': timezone.now()
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Error resolving alerts: {str(e)}',
+                'timestamp': timezone.now()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
     def schedule_alert_check(self, request):
         """Schedule an asynchronous alert check using Celery"""
         if not CELERY_AVAILABLE:

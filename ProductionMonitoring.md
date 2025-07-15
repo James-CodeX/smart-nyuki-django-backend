@@ -78,6 +78,32 @@
   - **POST Optional Fields**:
     - `resolution_notes`: Notes about how the alert was resolved
 
+- **Resolve All Alerts**: `POST /api/production/alerts/resolve_all/`
+  - **Purpose**: Mark all active alerts as resolved for the authenticated user
+  - **Authentication**: Required (Bearer token)
+  - **POST Optional Fields**:
+    - `resolution_notes`: Notes about how all alerts were resolved (default: "Bulk resolved by user")
+  - **Response Fields**:
+    - `message`: Success message with count of resolved alerts
+    - `alerts_resolved`: Number of alerts that were resolved
+    - `resolution_notes`: The resolution notes used
+    - `timestamp`: When the operation was performed
+  - **Example Response**:
+    ```json
+    {
+      "message": "Successfully resolved 5 alerts",
+      "alerts_resolved": 5,
+      "resolution_notes": "Bulk resolved by user",
+      "timestamp": "2025-07-15T12:55:52Z"
+    }
+    ```
+  - **Example Request**:
+    ```json
+    {
+      "resolution_notes": "Checked all hives - issues resolved"
+    }
+    ```
+
 Please make sure to set up authentication headers and proper permissions before accessing these endpoints.
 
 ## Frontend Guide: Handling Hive and Apiary Information
