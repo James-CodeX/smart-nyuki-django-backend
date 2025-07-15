@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'devices',
     'inspections',
     'production',
+    'settings',
 ]
 
 MIDDLEWARE = [
